@@ -4,32 +4,37 @@
 #![no_std]
 #![no_main]
 
+pub mod dmx;
+
+extern crate rp_pico;
+
 use bsp::entry;
+use bsp::hal::{
+    clocks::{init_clocks_and_plls, Clock},
+    pac,
+    pio::{PIOBuilder, PIOExt},
+    sio::Sio,
+    watchdog::Watchdog,
+};
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use panic_probe as _;
-
-// Provide an alias for our BSP so we can switch targets quickly.
-// Uncomment the BSP you included in Cargo.toml, the rest of the code does not need to change.
+use pio_proc::pio_file;
 use rp_pico as bsp;
-// use sparkfun_pro_micro_rp2040 as bsp;
 
-use bsp::hal::{
-    clocks::{init_clocks_and_plls, Clock},
-    pac,
-    sio::Sio,
-    watchdog::Watchdog,
-};
+use dmx::DmxOutput;
 
 #[entry]
 fn main() -> ! {
-    info!("Program start");
+    // Get Core and Peripherals, watchdog and SIO
+    info!("Fetching peripherals");
     let mut pac = pac::Peripherals::take().unwrap();
     let core = pac::CorePeripherals::take().unwrap();
     let mut watchdog = Watchdog::new(pac.WATCHDOG);
     let sio = Sio::new(pac.SIO);
 
+    // Setup internal clocks and plls
     // External high-speed crystal on the pico board is 12Mhz
     let external_xtal_freq_hz = 12_000_000u32;
     let clocks = init_clocks_and_plls(
@@ -44,8 +49,10 @@ fn main() -> ! {
     .ok()
     .unwrap();
 
+    // Create a Delay instance we might use later
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
+    // Get the pins so we can map them for whatever
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
         pac.PADS_BANK0,
@@ -55,6 +62,14 @@ fn main() -> ! {
 
     let mut led_pin = pins.led.into_push_pull_output();
 
+    // Load the DMX-output PIO program from file
+
+    /*
+    Initialize a PIO State machine with the DMX-output program
+    */
+    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+
+    let a = DmxOutput::new(&mut pio, sm0, clocks.system_clock.freq().to_Hz() as f32);
     loop {
         info!("on!");
         led_pin.set_high().unwrap();
