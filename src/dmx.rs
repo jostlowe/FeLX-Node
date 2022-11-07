@@ -5,7 +5,10 @@ use defmt_rtt as _;
 use panic_probe as _;
 use pio_proc::pio_file;
 use rp_pico as bsp;
-use rp_pico::hal::pio::{Running, Tx};
+use rp_pico::hal::{
+    gpio::{bank0::BankPinId, FunctionPio0, Pin, PinId},
+    pio::{Running, Tx},
+};
 
 /// The required clock frequency for the DMX PIO program to work
 const PIO_CLOCK_MHZ: usize = 1;
@@ -22,6 +25,7 @@ impl<P: PIOExt, SM: StateMachineIndex> DmxPIO<P, SM> {
     pub fn new(
         pio: &mut PIO<P>,
         sm: UninitStateMachine<(P, SM)>,
+        pin: u8,
         system_clock: &SystemClock,
     ) -> Option<DmxPIO<P, SM>> {
         let pio_program = pio_file!(
@@ -37,7 +41,7 @@ impl<P: PIOExt, SM: StateMachineIndex> DmxPIO<P, SM> {
         debug!("Clock divisor set to: {=f32}", divisor);
 
         let (sm_stopped, _, tx) = PIOBuilder::from_program(installed)
-            .set_pins(1, 1)
+            .set_pins(pin, 1)
             .clock_divisor(divisor)
             .build(sm);
 
@@ -61,14 +65,25 @@ impl<P: PIOExt, SM: StateMachineIndex> DmxPIO<P, SM> {
     }
 }
 
-pub struct Dmx<P: PIOExt, SM: StateMachineIndex> {
+pub struct Dmx<P, SM, N>
+where
+    P: PIOExt,
+    SM: StateMachineIndex,
+    N: PinId + BankPinId,
+{
     pio: DmxPIO<P, SM>,
+    pin: Pin<N, FunctionPio0>,
 }
 
-impl<P: PIOExt, SM: StateMachineIndex> Dmx<P, SM> {
+impl<P, SM, N> Dmx<P, SM, N>
+where
+    P: PIOExt,
+    SM: StateMachineIndex,
+    N: PinId + BankPinId,
+{
     /// Create a new DMX instance. returns [None] if there is no more program space in the PIO
-    pub fn new(pio: DmxPIO<P, SM>) -> Dmx<P, SM> {
-        Dmx { pio }
+    pub fn new(pio: DmxPIO<P, SM>, pin: Pin<N, FunctionPio0>) -> Dmx<P, SM, N> {
+        Dmx { pio, pin }
     }
 
     pub fn send_universe(&mut self, universe: &[u8]) {
@@ -85,4 +100,3 @@ pub struct DmxAsync<P: PIOExt, SM: StateMachineIndex> {
     dma_channel: usize,
     buffer: Universe,
 }
-impl<P: PIOExt, SM: StateMachineIndex> Dmx<P, SM> {}
