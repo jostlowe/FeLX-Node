@@ -1,23 +1,27 @@
+use bsp::hal::clocks::{Clock, SystemClock};
 use bsp::hal::pio::{
-    PIOBuilder, PIOExt, Running, StateMachine, StateMachineIndex, Stopped, UninitStateMachine,
-    ValidStateMachine, PIO,
+    PIOBuilder, PIOExt, StateMachine, StateMachineIndex, Stopped, UninitStateMachine, PIO,
 };
 use defmt::*;
 use defmt_rtt as _;
-use embedded_hal::digital::v2::OutputPin;
 use panic_probe as _;
 use pio_proc::pio_file;
 use rp_pico as bsp;
+use rp_pico::hal::pio::{Running, Tx};
+
+const DMX_UNIVERSE_SIZE: usize = 512;
+type Universe = [u8; DMX_UNIVERSE_SIZE];
 
 pub struct DmxOutput<P: PIOExt, SM: StateMachineIndex, S> {
-    state_machine: StateMachine<(P, SM), S>,
+    sm: StateMachine<(P, SM), S>,
+    tx: Tx<(P, SM)>,
 }
 
-impl<P: PIOExt, SM: StateMachineIndex, S> DmxOutput<P, SM, S> {
+impl<P: PIOExt, SM: StateMachineIndex> DmxOutput<P, SM, Stopped> {
     pub fn new(
         pio: &mut PIO<P>,
         sm: UninitStateMachine<(P, SM)>,
-        syst_clock_mhz: f32,
+        system_clock: &SystemClock,
     ) -> DmxOutput<P, SM, Stopped> {
         let pio_program = pio_file!(
             "./pio/dmx_output.pio",
@@ -27,11 +31,18 @@ impl<P: PIOExt, SM: StateMachineIndex, S> DmxOutput<P, SM, S> {
 
         let installed = pio.install(&pio_program).unwrap();
 
+        let divisor = 1.0 / system_clock.freq().to_MHz() as f32;
+
         let (sm, _, tx) = PIOBuilder::from_program(installed)
             .set_pins(1, 1)
-            .clock_divisor(1.0 / syst_clock_mhz)
+            .clock_divisor(divisor)
             .build(sm);
 
-        DmxOutput { state_machine: sm }
+        DmxOutput { sm, tx }
+    }
+
+    pub fn start(mut self, universe: Universe) -> DmxOutput<P, SM, Running> {
+        let sm = self.sm.start();
+        DmxOutput { sm, tx: self.tx }
     }
 }

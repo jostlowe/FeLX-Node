@@ -12,7 +12,7 @@ use bsp::entry;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
     pac,
-    pio::{PIOBuilder, PIOExt},
+    pio::PIOExt,
     sio::Sio,
     watchdog::Watchdog,
 };
@@ -20,7 +20,6 @@ use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use panic_probe as _;
-use pio_proc::pio_file;
 use rp_pico as bsp;
 
 use dmx::DmxOutput;
@@ -52,6 +51,10 @@ fn main() -> ! {
     // Create a Delay instance we might use later
     let mut delay = cortex_m::delay::Delay::new(core.SYST, clocks.system_clock.freq().to_Hz());
 
+    pac.DMA.ch[0]
+        .ch_ctrl_trig
+        .write(|w| w.en().set_bit().data_size().size_byte());
+
     // Get the pins so we can map them for whatever
     let pins = bsp::Pins::new(
         pac.IO_BANK0,
@@ -62,14 +65,14 @@ fn main() -> ! {
 
     let mut led_pin = pins.led.into_push_pull_output();
 
-    // Load the DMX-output PIO program from file
-
     /*
     Initialize a PIO State machine with the DMX-output program
     */
-    let (mut pio, sm0, _, _, _) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
 
-    let a = DmxOutput::new(&mut pio, sm0, clocks.system_clock.freq().to_Hz() as f32);
+    let mut _a = DmxOutput::new(&mut pio, sm0, &clocks.system_clock);
+    let _b = DmxOutput::new(&mut pio, sm1, &clocks.system_clock);
+
     loop {
         info!("on!");
         led_pin.set_high().unwrap();
