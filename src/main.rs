@@ -8,6 +8,7 @@ pub mod dmx;
 
 extern crate rp_pico;
 
+use crate::dmx::{Dmx, DmxPIO};
 use bsp::entry;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -21,8 +22,6 @@ use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
 use panic_probe as _;
 use rp_pico as bsp;
-
-use dmx::DmxOutput;
 
 #[entry]
 fn main() -> ! {
@@ -68,10 +67,11 @@ fn main() -> ! {
     /*
     Initialize a PIO State machine with the DMX-output program
     */
-    let (mut pio, sm0, sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, _sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
 
-    let mut _a = DmxOutput::new(&mut pio, sm0, &clocks.system_clock);
-    let _b = DmxOutput::new(&mut pio, sm1, &clocks.system_clock);
+    let mut a = Dmx::new(DmxPIO::new(&mut pio, sm0, &clocks.system_clock).unwrap());
+
+    a.send_universe(&[1, 2, 3, 4]);
 
     loop {
         info!("on!");
