@@ -6,7 +6,7 @@
 
 pub mod dmx;
 
-use crate::dmx::{Dmx, DmxPIO};
+use crate::dmx::{Dmx, DmxAsync, DmxPIO};
 use bsp::entry;
 use bsp::hal::{
     clocks::{init_clocks_and_plls, Clock},
@@ -16,7 +16,6 @@ use bsp::hal::{
     sio::Sio,
     watchdog::Watchdog,
 };
-use core::any::Any;
 use defmt::*;
 use defmt_rtt as _;
 use embedded_hal::digital::v2::OutputPin;
@@ -61,17 +60,16 @@ fn main() -> ! {
     /*
     Initialize a PIO State machine with the DMX-output program
     */
-    let (mut pio, sm0, _sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
+    let (mut pio, sm0, sm1, _sm2, _sm3) = pac.PIO0.split(&mut pac.RESETS);
 
     let mut dmx = Dmx::new(
         DmxPIO::new(&mut pio, sm0, 0, &clocks.system_clock).unwrap(),
         pins.gpio0.into_mode(),
     );
 
-    dmx.send_universe(&[1, 2, 3, 4]);
-
     loop {
-        info!("on!");
+        info!("Transmitting!");
+        dmx.send_universe(&[1, 2, 3, 4]);
         delay.delay_ms(500);
     }
 }
